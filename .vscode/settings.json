@@ -1,0 +1,8 @@
+{
+  "python.analysis.extraPaths": ["./backend"],
+  "python.analysis.typeCheckingMode": "off",
+  "editor.formatOnSave": false,
+  "python.analysis.diagnosticSeverityOverrides": {
+    "reportMissingModuleSource": "none"
+  }
+}

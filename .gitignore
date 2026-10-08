@@ -1,0 +1,16 @@
+# Secrets & Environment Variables
+.env
+.env.local
+.env.*
+
+# Python / Backend
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Node / Frontend
+node_modules/
+.next/
+out/
+build/
