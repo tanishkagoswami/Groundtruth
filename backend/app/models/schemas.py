@@ -3,7 +3,7 @@ from typing import List, Dict, Any, Optional
 
 class PaperRequest(BaseModel):
     arxiv_url: str
-    arxiv_id: str
+    arxiv_id: Optional[str] = ""   # optional: the backend extracts the ID from arxiv_url itself
     github_url: Optional[str] = ""
 
 class GitHubMetrics(BaseModel):
@@ -19,6 +19,10 @@ class FeasibilityReport(BaseModel):
     dataset_validity: bool = False
     student_feasibility_score: int = 0
     citations: List[Dict[str, Any]] = []
+    # Lets the UI (and the eval) tell "the paper states no hardware" apart from
+    # "we only had the abstract, so we could not tell".
+    text_source: str = "full_text"   # "full_text" | "abstract_only"
+    text_chars: int = 0
 
 class ScaffoldRequest(BaseModel):
     github_url: str

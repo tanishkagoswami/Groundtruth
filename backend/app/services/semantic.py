@@ -1,4 +1,12 @@
+import os
+import re
+
 import httpx
+
+from app.services.arxiv import extract_arxiv_id
+
+OPENALEX = "https://api.openalex.org"
+
 
 def reconstruct_abstract(inverted_index: dict) -> str:
     """Converts OpenAlex's inverted index format back into a readable string."""
@@ -8,69 +16,95 @@ def reconstruct_abstract(inverted_index: dict) -> str:
         # The 'if positions' check prevents the ValueError crash
         max_pos = max(max(positions) for positions in inverted_index.values() if positions)
         words = [""] * (max_pos + 1)
-        
+
         for word, positions in inverted_index.items():
             for pos in positions:
                 words[pos] = word
-                
+
         return " ".join(words).strip()
     except Exception:
         # Fails gracefully without crashing the FastAPI endpoint
         return ""
 
-async def fetch_citation_context(arxiv_id: str):
-    clean_id = arxiv_id.split("/")[-1].replace("arxiv:", "").replace(".pdf", "")
-    clean_id = clean_id.split('v')[0] if 'v' in clean_id else clean_id
-    
+
+def _norm_title(title) -> str:
+    return re.sub(r"[^a-z0-9]", "", (title or "").lower())
+
+
+def _params(extra: dict | None = None) -> dict:
+    params = dict(extra or {})
+    email = os.environ.get("OPENALEX_EMAIL")  # optional: puts you in OpenAlex's "polite pool"
+    if email:
+        params["mailto"] = email
+    return params
+
+
+def _doi_for(paper_id: str) -> str | None:
+    """arXiv ID -> its DataCite DOI (10.48550/arXiv.<id>); a DOI passes through unchanged."""
+    pid = (paper_id or "").strip()
+    if pid.lower().startswith("10."):
+        return pid
+    arxiv_id = extract_arxiv_id(pid)
+    if arxiv_id:
+        bare_id = re.sub(r"v\d+$", "", arxiv_id)
+        return "10.48550/arXiv." + bare_id
+    return None
+
+
+async def _resolve_work(client: httpx.AsyncClient, paper_id: str, title_hint: str | None):
+    # 1) Exact lookup by DOI. The old code searched the text "2302.13971", which returns unrelated papers.
+    doi = _doi_for(paper_id)
+    if doi:
+        r = await client.get(f"{OPENALEX}/works", params=_params({"filter": f"doi:{doi.lower()}"}), timeout=20.0)
+        if r.status_code == 200:
+            results = r.json().get("results", [])
+            if results:
+                return results[0]
+
+    # 2) Title search, accepted only when the returned title actually matches.
+    #    No match -> no citations (an empty list beats unrelated papers).
+    if title_hint:
+        r = await client.get(f"{OPENALEX}/works", params=_params({"search": title_hint, "per-page": 5}), timeout=20.0)
+        if r.status_code == 200:
+            want = _norm_title(title_hint)
+            for work in r.json().get("results", []):
+                got = _norm_title(work.get("title"))
+                if got and want and (got == want or got.startswith(want) or want.startswith(got)):
+                    return work
+    return None
+
+
+async def fetch_citation_context(arxiv_id: str, title_hint: str | None = None):
     async with httpx.AsyncClient() as client:
         try:
-            # Step 1: Use OpenAlex's global search to find the true ID
-            search_url = f"https://api.openalex.org/works?search={clean_id}"
-            search_response = await client.get(
-                search_url,
-                params={"mailto": "your_email@example.com"} # Polite pool authentication
-            )
-            
-            if search_response.status_code != 200:
+            work = await _resolve_work(client, arxiv_id, title_hint)
+            if not work or not work.get("id"):
                 return []
-                
-            search_data = search_response.json()
-            results = search_data.get("results", [])
-            
-            if not results:
-                return []
-                
-            openalex_id = results[0].get("id")
-            if not openalex_id:
-                return []
-                
-            short_id = openalex_id.split("/")[-1]
-            
-            # Step 2: Fetch the actual citations
-            cites_url = f"https://api.openalex.org/works?filter=cites:{short_id}"
+
+            short_id = work["id"].split("/")[-1]
+
+            # Most-cited papers that cite this one = its downstream influence
             cites_response = await client.get(
-                cites_url,
-                params={"mailto": "your_email@example.com"}
+                f"{OPENALEX}/works",
+                params=_params({"filter": f"cites:{short_id}", "sort": "cited_by_count:desc", "per-page": 10}),
+                timeout=20.0,
             )
-            
             if cites_response.status_code != 200:
                 return []
-            
-            data = cites_response.json()
-            
+
             citations = []
-            for work in data.get("results", [])[:5]: 
-                raw_index = work.get("abstract_inverted_index")
-                readable_abstract = reconstruct_abstract(raw_index)
-                
+            for item in cites_response.json().get("results", []):
+                readable_abstract = reconstruct_abstract(item.get("abstract_inverted_index"))
                 if readable_abstract:
                     citations.append({
-                        "title": work.get("title", "Unknown Title"),
-                        "context": readable_abstract
+                        "title": item.get("title") or "Unknown Title",
+                        "context": readable_abstract,
                     })
-                
+                if len(citations) == 5:
+                    break
+
             return citations
-            
+
         except Exception as e:
             print(f"OpenAlex Error: {e}")
             return []

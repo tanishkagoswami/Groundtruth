@@ -10,6 +10,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.services.pdf_parser import extract_text_from_bytes
 from app.services.llm import extract_engineering_constraints
 from app.api.endpoints import router as api_router
+# Comma-separated list of allowed frontend origins, no trailing slashes.
+# Example: "http://localhost:3000,https://your-app.vercel.app"
+ALLOWED_ORIGINS = [
+    o.strip().rstrip("/")
+    for o in os.environ.get("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
+    if o.strip()
+]
 
 app = FastAPI(
     title="GroundTruth Engine API",
@@ -20,8 +27,7 @@ app = FastAPI(
 # CRITICAL UPDATE: Add CORS middleware so Next.js can communicate with FastAPI
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # Next.js local development URL
-    allow_credentials=True,
+    allow_origins=ALLOWED_ORIGINS,    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )

@@ -14,3 +14,9 @@ node_modules/
 .next/
 out/
 build/
+backend/.llm_cache/
+*.bak
+backup_*/
+backend/eval/results/run_*.json
+backend/eval/*.bak*
+__pycache__/
