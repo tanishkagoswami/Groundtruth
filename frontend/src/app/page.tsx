@@ -35,6 +35,25 @@ export default function Home() {
     return () => window.removeEventListener("mousemove", handleMouseMove);
   }, []);
 
+  // Seconds since the request started, so we can tell the user what is going on.
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    if (!loading) {
+      setElapsed(0);
+      return;
+    }
+    const started = Date.now();
+    const id = setInterval(() => setElapsed(Math.floor((Date.now() - started) / 1000)), 1000);
+    return () => clearInterval(id);
+  }, [loading]);
+
+  const loadingMessage =
+    elapsed < 8
+      ? "Analysing paper..."
+      : elapsed < 40
+      ? "Still working. If the server was idle, it can take up to a minute to wake up."
+      : "Large papers can take over a minute. Hang tight...";
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setFile(e.target.files[0]);
@@ -174,6 +193,21 @@ export default function Home() {
             </div>
           </div>
         </div>
+
+        {/* NEW: progress message while the request is running */}
+        {loading && (
+          <p className="mt-8 w-full max-w-3xl text-sm text-cyan-400/80 tracking-wide">
+            {loadingMessage} <span className="text-slate-500">({elapsed}s)</span>
+          </p>
+        )}
+
+        {/* NEW: visible error message */}
+        {error && !loading && (
+          <div className="mt-8 w-full max-w-3xl flex items-start gap-3 border border-red-500/40 bg-red-950/30 text-red-300 text-sm p-4 rounded-sm">
+            <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+            <p>{error}</p>
+          </div>
+        )}
 
         {/* Backend report */}
         {reportData && (
