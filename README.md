@@ -17,14 +17,14 @@ A paper says "we trained on 512 GPUs for three weeks". A student with one laptop
 - It finds the compute the authors say they used: accelerator model, count, GPU-hours, training time, model size.
 - It scores feasibility for a student from 0 to 100 (higher means easier).
 - It checks the GitHub repository for the files a clean setup needs.
-- It looks up related papers, checks that the dataset can be found, and generates a starter environment file.
+- It lists the most-cited papers that build on it, checks that the dataset can be found, and generates a starter environment file.
 
 It never guesses. If the paper does not state its hardware, Groundtruth reports none rather than inventing it.
 
 ## Screenshots
 | | |
 |---|---|
-| **Compute feasibility and repository health:** "Attention Is All You Need" with its GitHub repository. 8x P100, 672 GPU-hours and 3.5 days are read from the paper, the score is 67/100, and the repo's setup friction is 46/100 with a dependency warning<br>![Dashboard](docs/01-dashboard.png) | **Literature context and beginner assessment:** related papers from OpenAlex, a dataset availability check, and a plain-language verdict<br>![Context and assessment](docs/02-context-assessment.png) |
+| **Compute feasibility and repository health:** "Attention Is All You Need" with its GitHub repository. 8x P100, 672 GPU-hours and 3.5 days are read from the paper, the score is 67/100, and the repo's setup friction is 46/100 with a dependency warning<br>![Dashboard](docs/01-dashboard.png) | **Literature context and beginner assessment:** the most-cited papers that cite this one (from OpenAlex), a dataset availability check, and a plain-language verdict<br>![Context and assessment](docs/02-context-assessment.png) |
 | **Environment scaffold:** a Dockerfile generated from the extracted hardware, ready to copy. A CUDA base image appears only when a GPU is needed<br>![Scaffold](docs/03-scaffold.png) | |
 
 ---
@@ -35,7 +35,7 @@ It never guesses. If the paper does not state its hardware, Groundtruth reports 
 | **Compute** | Accelerator model, count, memory, GPU/TPU-hours, training time, multi-node, largest model size | The paper's own text, extracted by an LLM, only where the authors state it |
 | **Feasibility score** | 0 to 100 for a student, higher is easier | Rule-based code over the extracted facts. The LLM does not pick the score |
 | **Repository health** | A setup-friction score and dependency warnings | The GitHub API |
-| **Literature context** | Related papers | OpenAlex |
+| **Literature context** | The most-cited papers that cite this one (its downstream influence) | OpenAlex |
 | **Dataset availability** | Whether the named dataset can be found | The Hugging Face Hub |
 | **Environment scaffold** | A Dockerfile or setup script for the repo | An LLM, from the hardware flags and the repo's missing files |
 
@@ -61,7 +61,7 @@ FastAPI (Render)
    ├─ pick the passages about hardware ──► Groq LLM (temperature 0) ──► facts as JSON
    ├─ check the facts against the paper text ──► rule-based feasibility score
    ├─ GitHub API ──► repository health
-   ├─ OpenAlex ──► literature context
+   ├─ OpenAlex ──► papers that cite this one
    └─ Hugging Face Hub ──► dataset check
 ```
 
@@ -186,12 +186,12 @@ The backend runs on **Render** and the frontend on **Vercel**, both on free plan
 1. Connect this repository. Set **Root Directory** to `backend`.
 2. Build command: `pip install -r requirements.txt`
 3. Start command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
-4. Environment variables: `PYTHON_VERSION` (for example `3.11.4`), `GROQ_API_KEY`, `GITHUB_TOKEN`, `ALLOWED_ORIGINS` ([your Vercel address](https://groundtruth-ten-rho.vercel.app/)).
+4. Environment variables: `PYTHON_VERSION` (for example `3.11.4`), `GROQ_API_KEY`, `GITHUB_TOKEN`, `ALLOWED_ORIGINS` (your Vercel address).
 5. Health check path: `/health`
 
 **Frontend (Vercel)**
 1. Import the repository. Set **Root Directory** to `frontend`.
-2. Add `NEXT_PUBLIC_API_URL` ([your Render address, no trailing slash](https://groundtruth-api-pg7k.onrender.com)) **before** the first deploy. If you add it later, redeploy.
+2. Add `NEXT_PUBLIC_API_URL` (your Render address, no trailing slash) **before** the first deploy. If you add it later, redeploy.
 
 The free Render plan sleeps when idle and its disk is temporary, so the on-disk cache does not survive a restart.
 
@@ -229,3 +229,7 @@ docs/screenshots/
 ## Author
 Built by Tanishka · [@tanishkagoswami](https://github.com/tanishkagoswami)
 
+## License
+MIT. See [LICENSE](LICENSE).
+
+Dependencies keep their own licenses. Note that PyMuPDF, used for PDF text extraction, is available under the AGPL-3.0 or a commercial license from Artifex, so anyone redistributing or hosting this project should check that its terms work for them.

@@ -74,6 +74,27 @@ async def _resolve_work(client: httpx.AsyncClient, paper_id: str, title_hint: st
     return None
 
 
+def _dedupe_citations(items: list[dict], limit: int = 5) -> list[dict]:
+    """OpenAlex often lists one paper twice (e.g. the arXiv preprint and the conference version).
+    Merge records that share a normalised title and keep the fuller abstract, so the list shows
+    each paper once, in the original most-cited-first order."""
+    by_title: dict[str, dict] = {}
+    order: list[str] = []
+    for item in items:
+        abstract = reconstruct_abstract(item.get("abstract_inverted_index"))
+        if not abstract:
+            continue
+        title = item.get("title") or "Unknown Title"
+        key = _norm_title(title) or title
+        if key in by_title:
+            if len(abstract) > len(by_title[key]["context"]):
+                by_title[key]["context"] = abstract
+            continue
+        by_title[key] = {"title": title, "context": abstract}
+        order.append(key)
+    return [by_title[k] for k in order[:limit]]
+
+
 async def fetch_citation_context(arxiv_id: str, title_hint: str | None = None):
     async with httpx.AsyncClient() as client:
         try:
@@ -92,18 +113,7 @@ async def fetch_citation_context(arxiv_id: str, title_hint: str | None = None):
             if cites_response.status_code != 200:
                 return []
 
-            citations = []
-            for item in cites_response.json().get("results", []):
-                readable_abstract = reconstruct_abstract(item.get("abstract_inverted_index"))
-                if readable_abstract:
-                    citations.append({
-                        "title": item.get("title") or "Unknown Title",
-                        "context": readable_abstract,
-                    })
-                if len(citations) == 5:
-                    break
-
-            return citations
+            return _dedupe_citations(cites_response.json().get("results", []))
 
         except Exception as e:
             print(f"OpenAlex Error: {e}")
